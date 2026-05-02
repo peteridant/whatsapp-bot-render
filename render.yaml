@@ -1,0 +1,19 @@
+services:
+  - type: worker
+    name: whatsapp-bot
+    runtime: docker
+    plan: starter
+    autoDeploy: true
+    disk:
+      name: whatsapp-bot-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: BOT_HEADLESS
+        value: "true"
+      - key: CHROME_PATH
+        value: /usr/bin/chromium
+      - key: WWEBJS_AUTH_PATH
+        value: /app/data/.wwebjs_auth
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
