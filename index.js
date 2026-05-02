@@ -20,8 +20,10 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const DEFAULT_AI_PROMPT = 'You are a helpful WhatsApp assistant. Keep replies clear, friendly, and concise.';
 const chatHistories = new Map();
+const seenMessageIds = new Set();
 
 let sock;
+let reconnecting = false;
 
 function createDefaultStore() {
     return {
@@ -700,8 +702,20 @@ async function handleCommandMessage(context) {
 
 async function handleMessages(messages) {
     for (const message of messages) {
-        if (!message.message || message.key.remoteJid === 'status@broadcast') {
+        if (!message.message || message.key.remoteJid === 'status@broadcast' || message.key.fromMe) {
             continue;
+        }
+
+        const messageId = message.key.id;
+
+        if (!messageId || seenMessageIds.has(messageId)) {
+            continue;
+        }
+
+        seenMessageIds.add(messageId);
+
+        if (seenMessageIds.size > 5000) {
+            seenMessageIds.clear();
         }
 
         const context = createContext(message);
@@ -775,11 +789,19 @@ async function startSock() {
 
             console.warn('Connection closed:', statusCode || lastDisconnect?.error || 'unknown');
 
-            if (shouldReconnect) {
+            if (shouldReconnect && !reconnecting) {
+                reconnecting = true;
                 console.log('Reconnecting...');
-                await new Promise((resolve) => setTimeout(resolve, 5000));
-                await startSock();
-            } else {
+                setTimeout(async () => {
+                    try {
+                        await startSock();
+                    } catch (error) {
+                        console.error('Reconnection failed:', error);
+                    } finally {
+                        reconnecting = false;
+                    }
+                }, 5000);
+            } else if (!shouldReconnect) {
                 console.error('Logged out. Delete the Baileys auth folder if you want to link again.');
             }
         }
