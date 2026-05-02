@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const QRCode = require('qrcode');
 const qrcode = require('qrcode-terminal');
 const {
     default: makeWASocket,
@@ -14,6 +15,7 @@ const {
 const PREFIX = '!';
 const DATA_FILE = path.join(__dirname, 'bot-data.json');
 const AUTH_PATH = process.env.BAILEYS_AUTH_PATH || path.join(__dirname, '.baileys_auth');
+const QR_IMAGE_PATH = path.join(AUTH_PATH, 'whatsapp-qr.png');
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const DEFAULT_AI_PROMPT = 'You are a helpful WhatsApp assistant. Keep replies clear, friendly, and concise.';
@@ -752,6 +754,15 @@ async function startSock() {
         if (qr) {
             console.log('Scan this QR code with WhatsApp:');
             qrcode.generate(qr, { small: true });
+
+            try {
+                fs.mkdirSync(AUTH_PATH, { recursive: true });
+                await QRCode.toFile(QR_IMAGE_PATH, qr, { type: 'png' });
+                console.log(`Saved QR image to: ${QR_IMAGE_PATH}`);
+                console.log('If needed, open /qr in a browser to view the QR image.');
+            } catch (error) {
+                console.error('Failed to save QR image:', error);
+            }
         }
 
         if (connection === 'open') {
@@ -784,6 +795,19 @@ http.createServer((req, res) => {
     if (req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('OK');
+        return;
+    }
+
+    if (req.url === '/qr') {
+        if (!fs.existsSync(QR_IMAGE_PATH)) {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('QR image not available yet. Wait for bot initialization and scan log output first.');
+            return;
+        }
+
+        const qrData = fs.readFileSync(QR_IMAGE_PATH);
+        res.writeHead(200, { 'Content-Type': 'image/png' });
+        res.end(qrData);
         return;
     }
 
